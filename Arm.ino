@@ -6,11 +6,16 @@ const char *ssid = "ESP32_Remote";
 const char *password = "remote1234";
 
 // Servo configuration
-const int SERVO1_PIN = 18;
-const int SERVO2_PIN = 19;
-Servo servo1;
-Servo servo2;
-int currentAngle = 90; // Default angle
+const int SLIDER_SERVO1_PIN = 18;  // First slider servo
+const int SLIDER_SERVO2_PIN = 19;  // Second slider servo
+const int JOYSTICK_SERVO_PIN = 21; // Joystick-controlled servo
+
+Servo sliderServo1;
+Servo sliderServo2;
+Servo joystickServo;
+
+int sliderAngle = 90;        // Current slider value
+int joystickServoAngle = 90; // Current joystick servo angle
 
 WiFiUDP udp;
 
@@ -31,13 +36,24 @@ void setup()
     Serial.println("UDP server started");
 
     // Attach servos
-    servo1.attach(SERVO1_PIN);
-    servo2.attach(SERVO2_PIN);
+    sliderServo1.attach(SLIDER_SERVO1_PIN);
+    sliderServo2.attach(SLIDER_SERVO2_PIN);
+    joystickServo.attach(JOYSTICK_SERVO_PIN);
 
-    // Set initial position
-    servo1.write(currentAngle);
-    servo2.write(180 - currentAngle); // Opposite direction
-    Serial.println("Servos initialized at 90°");
+    // Set initial positions
+    sliderServo1.write(sliderAngle);
+    sliderServo2.write(180 - sliderAngle); // Opposite direction
+    joystickServo.write(joystickServoAngle);
+
+    Serial.println("Servos initialized");
+    Serial.print("Slider servos: ");
+    Serial.print(sliderAngle);
+    Serial.print("° and ");
+    Serial.print(180 - sliderAngle);
+    Serial.println("°");
+    Serial.print("Joystick servo: ");
+    Serial.print(joystickServoAngle);
+    Serial.println("°");
 }
 
 void loop()
@@ -63,18 +79,34 @@ void loop()
                 int newAngle = atoi(packetBuffer + 7);
                 newAngle = constrain(newAngle, 0, 180);
 
-                if (newAngle != currentAngle)
+                if (newAngle != sliderAngle)
                 {
-                    currentAngle = newAngle;
+                    sliderAngle = newAngle;
 
-                    // Update servos
-                    servo1.write(currentAngle);
-                    servo2.write(180 - currentAngle); // Reverse for opposite mounted servo
+                    // Update slider servos
+                    sliderServo1.write(sliderAngle);
+                    sliderServo2.write(180 - sliderAngle); // Reverse for opposite mounted servo
 
-                    Serial.print("Servos set to: ");
-                    Serial.print(currentAngle);
+                    Serial.print("Slider servos updated: ");
+                    Serial.print(sliderAngle);
                     Serial.print("° and ");
-                    Serial.print(180 - currentAngle);
+                    Serial.print(180 - sliderAngle);
+                    Serial.println("°");
+                }
+            }
+            // Process joystick servo commands
+            else if (strncmp(packetBuffer, "JOY_SERVO_", 10) == 0)
+            {
+                int newAngle = atoi(packetBuffer + 10);
+                newAngle = constrain(newAngle, 0, 180);
+
+                if (newAngle != joystickServoAngle)
+                {
+                    joystickServoAngle = newAngle;
+                    joystickServo.write(joystickServoAngle);
+
+                    Serial.print("Joystick servo updated: ");
+                    Serial.print(joystickServoAngle);
                     Serial.println("°");
                 }
             }
