@@ -10,7 +10,7 @@ PORT = 12345
 class RemoteController:
     def __init__(self):
         pygame.init()
-        self.width, self.height = 1000, 700
+        self.width, self.height = 800, 600
         self.screen = pygame.display.set_mode((self.width, self.height))
         pygame.display.set_caption("ESP32 Remote Controller")
         
@@ -31,50 +31,27 @@ class RemoteController:
         self.font = pygame.font.SysFont("Arial", 20)
         self.small_font = pygame.font.SysFont("Arial", 16)
         
-        # Define card areas
-        self.cards = {
-            "status": pygame.Rect(20, 20, self.width-40, 80),
-            "joystick": pygame.Rect(20, 120, 460, 280),
-            "slider": pygame.Rect(500, 120, 240, 280),
-            "servos": pygame.Rect(760, 120, 220, 280),
-            "joystick_servo": pygame.Rect(20, 420, 460, 180),
-            "instructions": pygame.Rect(20, 620, self.width-40, 60)
-        }
-        
-        # Joystick properties
-        self.joy_center = (
-            self.cards["joystick"].centerx, 
-            self.cards["joystick"].centery - 20
-        )
-        self.joy_radius = 90
+        # Joystick properties (bottom left)
+        self.joy_center = (150, self.height - 150)
+        self.joy_radius = 100
         self.knob_radius = 30
         self.knob_pos = list(self.joy_center)
         self.dragging = False
         
-        # Slider properties
-        self.slider_x = self.cards["slider"].centerx
-        self.slider_y = self.cards["slider"].top + 60
+        # Slider properties (bottom right)
+        self.slider_x = self.width - 150
+        self.slider_y = 150  # Higher position for taller slider
         self.slider_width = 30
-        self.slider_height = 180
-        self.slider_knob_radius = 15
+        self.slider_height = 350  # Increased height
+        self.slider_knob_radius = 18
         self.slider_pos = self.slider_y + self.slider_height // 2
         self.slider_dragging = False
         self.slider_value = 90  # Start at midpoint (90)
         self.last_sent_value = 90
         
-        # Joystick servo properties
-        self.joystick_servo_value = 90  # Start at center
-        self.joystick_servo_rect = pygame.Rect(
-            self.cards["joystick_servo"].left + 30,
-            self.cards["joystick_servo"].top + 50,
-            self.cards["joystick_servo"].width - 60,
-            30
-        )
-        
-        # Servo status
-        self.servo1_value = 90
-        self.servo2_value = 90
-        self.servo3_value = 90
+        # Status bar at top
+        self.status_height = 60
+        self.status_rect = pygame.Rect(0, 0, self.width, self.status_height)
         
         # Connection status
         self.connection_status = "DISCONNECTED"
@@ -124,55 +101,46 @@ class RemoteController:
             self.status_color = self.warning_color
             print(f"Send error: {str(e)}")
 
-    def draw_card(self, rect, title, color=None):
-        if color is None:
-            color = self.card_color
-            
-        # Draw card background
-        pygame.draw.rect(self.screen, color, rect, 0, 10)
-        pygame.draw.rect(self.screen, (70, 75, 90), rect, 2, 10)
-        
-        # Draw card title
-        title_surf = self.header_font.render(title, True, self.text_color)
-        self.screen.blit(title_surf, (rect.x + 15, rect.y + 10))
-        
-        return rect
-
     def draw_interface(self):
         # Background
         self.screen.fill(self.bg_color)
         
-        # Draw cards
-        self.draw_card(self.cards["status"], "CONNECTION STATUS")
-        self.draw_card(self.cards["joystick"], "JOYSTICK CONTROL")
-        self.draw_card(self.cards["slider"], "SLIDER CONTROL")
-        self.draw_card(self.cards["servos"], "SERVO STATUS")
-        self.draw_card(self.cards["joystick_servo"], "JOYSTICK SERVO")
-        self.draw_card(self.cards["instructions"], "INSTRUCTIONS")
+        # Draw status bar
+        pygame.draw.rect(self.screen, self.card_color, self.status_rect)
+        pygame.draw.line(self.screen, (70, 75, 90), (0, self.status_height), 
+                         (self.width, self.status_height), 2)
         
-        # Status card content
+        # Draw title and status
+        title = self.title_font.render("ESP32 Remote Controller", True, self.primary_color)
+        self.screen.blit(title, (self.width//2 - title.get_width()//2, 15))
+        
         status_text = self.font.render(f"Status: {self.connection_status}", True, self.status_color)
-        self.screen.blit(status_text, (self.cards["status"].x + 20, self.cards["status"].y + 45))
+        self.screen.blit(status_text, (20, 20))
         
         ip_text = self.small_font.render(f"IP: {ESP32_IP}:{PORT}", True, self.light_text)
-        self.screen.blit(ip_text, (self.cards["status"].right - 180, self.cards["status"].y + 50))
+        self.screen.blit(ip_text, (self.width - 180, 25))
         
-        # Draw joystick
+        # Draw joystick (bottom left)
         pygame.draw.circle(self.screen, self.accent_color, self.joy_center, self.joy_radius, 0)
         pygame.draw.circle(self.screen, (70, 75, 90), self.joy_center, self.joy_radius, 3)
         pygame.draw.circle(self.screen, self.primary_color, self.knob_pos, self.knob_radius, 0)
         
         # Draw joystick labels
-        pygame.draw.polygon(self.screen, self.text_color, [
-            (self.joy_center[0], self.joy_center[1] - self.joy_radius - 20),
-            (self.joy_center[0] - 10, self.joy_center[1] - self.joy_radius),
-            (self.joy_center[0] + 10, self.joy_center[1] - self.joy_radius)
-        ])
         w_text = self.font.render("W", True, self.text_color)
-        self.screen.blit(w_text, (self.joy_center[0] - w_text.get_width()//2, 
-                                 self.joy_center[1] - self.joy_radius - 40))
+        a_text = self.font.render("A", True, self.text_color)
+        s_text = self.font.render("S", True, self.text_color)
+        d_text = self.font.render("D", True, self.text_color)
         
-        # Draw slider
+        self.screen.blit(w_text, (self.joy_center[0] - w_text.get_width()//2, 
+                                 self.joy_center[1] - self.joy_radius - 30))
+        self.screen.blit(a_text, (self.joy_center[0] - self.joy_radius - 30, 
+                                 self.joy_center[1] - a_text.get_height()//2))
+        self.screen.blit(s_text, (self.joy_center[0] - s_text.get_width()//2, 
+                                 self.joy_center[1] + self.joy_radius + 10))
+        self.screen.blit(d_text, (self.joy_center[0] + self.joy_radius + 10, 
+                                 self.joy_center[1] - d_text.get_height()//2))
+        
+        # Draw slider (bottom right)
         pygame.draw.rect(self.screen, self.accent_color, 
                         (self.slider_x - self.slider_width//2, self.slider_y, 
                          self.slider_width, self.slider_height), 0, 10)
@@ -191,63 +159,30 @@ class RemoteController:
         # Draw slider value
         value_text = self.value_font.render(f"{self.slider_value}°", True, self.primary_color)
         self.screen.blit(value_text, (self.slider_x - value_text.get_width()//2, 
-                                    self.slider_y - 40))
+                                    self.slider_y - 50))
         
         # Draw slider min/max labels
         min_text = self.font.render("0", True, self.text_color)
         max_text = self.font.render("180", True, self.text_color)
-        self.screen.blit(min_text, (self.slider_x - self.slider_width//2 - 20, 
+        self.screen.blit(min_text, (self.slider_x - self.slider_width//2 - 25, 
                                   self.slider_y + self.slider_height - 10))
-        self.screen.blit(max_text, (self.slider_x - self.slider_width//2 - 25, 
+        self.screen.blit(max_text, (self.slider_x - self.slider_width//2 - 30, 
                                   self.slider_y - 10))
         
-        # Draw joystick servo indicator
-        pygame.draw.rect(self.screen, self.accent_color, self.joystick_servo_rect, 0, 5)
-        pygame.draw.rect(self.screen, (70, 75, 90), self.joystick_servo_rect, 2, 5)
+        # Draw arrow key indicators for slider
+        up_text = self.font.render("↑", True, self.text_color)
+        down_text = self.font.render("↓", True, self.text_color)
+        self.screen.blit(up_text, (self.slider_x + 30, self.slider_y - 10))
+        self.screen.blit(down_text, (self.slider_x + 30, self.slider_y + self.slider_height - 25))
         
-        # Draw servo position indicator
-        indicator_x = self.joystick_servo_rect.x + (self.joystick_servo_value / 180) * self.joystick_servo_rect.width
-        pygame.draw.circle(self.screen, (255, 255, 255), (int(indicator_x), self.joystick_servo_rect.centery), 15, 0)
-        pygame.draw.circle(self.screen, (0, 0, 0), (int(indicator_x), self.joystick_servo_rect.centery), 15, 2)
+        # Draw control labels
+        joystick_label = self.header_font.render("Joystick Control", True, self.primary_color)
+        slider_label = self.header_font.render("Slider Control", True, self.primary_color)
         
-        # Draw servo position labels
-        servo_text = self.value_font.render(f"{self.joystick_servo_value}°", True, self.primary_color)
-        self.screen.blit(servo_text, (self.joystick_servo_rect.centerx - servo_text.get_width()//2, 
-                                    self.joystick_servo_rect.y - 40))
-        
-        # Draw min/max labels for joystick servo
-        left_text = self.font.render("20°", True, self.text_color)
-        center_text = self.font.render("90°", True, self.text_color)
-        right_text = self.font.render("160°", True, self.text_color)
-        self.screen.blit(left_text, (self.joystick_servo_rect.x - 25, self.joystick_servo_rect.y + 40))
-        self.screen.blit(center_text, (self.joystick_servo_rect.centerx - center_text.get_width()//2, self.joystick_servo_rect.y + 40))
-        self.screen.blit(right_text, (self.joystick_servo_rect.right - 35, self.joystick_servo_rect.y + 40))
-        
-        # Draw servo status
-        servo1_text = self.font.render(f"Servo 1: {self.servo1_value}°", True, self.text_color)
-        servo2_text = self.font.render(f"Servo 2: {self.servo2_value}°", True, self.text_color)
-        servo3_text = self.font.render(f"Servo 3: {self.servo3_value}°", True, self.text_color)
-        
-        self.screen.blit(servo1_text, (self.cards["servos"].x + 20, self.cards["servos"].y + 50))
-        self.screen.blit(servo2_text, (self.cards["servos"].x + 20, self.cards["servos"].y + 90))
-        self.screen.blit(servo3_text, (self.cards["servos"].x + 20, self.cards["servos"].y + 130))
-        
-        # Draw servo visual indicators
-        pygame.draw.rect(self.screen, self.accent_color, (self.cards["servos"].x + 150, self.cards["servos"].y + 50, 50, 20), 0, 5)
-        pygame.draw.rect(self.screen, self.accent_color, (self.cards["servos"].x + 150, self.cards["servos"].y + 90, 50, 20), 0, 5)
-        pygame.draw.rect(self.screen, self.accent_color, (self.cards["servos"].x + 150, self.cards["servos"].y + 130, 50, 20), 0, 5)
-        
-        # Draw instructions
-        instructions = [
-            "Joystick: Drag or use W/A/S/D keys",
-            "Slider: Drag or use UP/DOWN arrows",
-            "Press R to reconnect, ESC to exit"
-        ]
-        
-        for i, text in enumerate(instructions):
-            rendered = self.font.render(text, True, self.light_text)
-            self.screen.blit(rendered, (self.cards["instructions"].x + 20, 
-                                       self.cards["instructions"].y + 20 + i*25))
+        self.screen.blit(joystick_label, (self.joy_center[0] - joystick_label.get_width()//2, 
+                                         self.joy_center[1] + self.joy_radius + 40))
+        self.screen.blit(slider_label, (self.slider_x - slider_label.get_width()//2, 
+                                       self.slider_y + self.slider_height + 40))
 
     def get_joystick_direction(self):
         dx = self.knob_pos[0] - self.joy_center[0]
@@ -277,10 +212,6 @@ class RemoteController:
             self.slider_value = value
             self.slider_pos = self.slider_y + self.slider_height * (1 - value/180)
             
-            # Update servo values (for display)
-            self.servo1_value = value
-            self.servo2_value = 180 - value
-            
             # Send command if value changed
             if self.slider_value != self.last_sent_value:
                 self.send_command(f"SLIDER_{self.slider_value}")
@@ -295,11 +226,8 @@ class RemoteController:
         else:  # CENTER or other
             new_value = 90
         
-        # Update if changed
-        if new_value != self.joystick_servo_value:
-            self.joystick_servo_value = new_value
-            self.servo3_value = new_value
-            self.send_command(f"JOY_SERVO_{new_value}")
+        # Send command
+        self.send_command(f"JOY_SERVO_{new_value}")
 
     def update_joystick_from_keys(self):
         # Calculate movement vector from keys
