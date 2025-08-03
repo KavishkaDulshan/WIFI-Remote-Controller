@@ -20,6 +20,7 @@ class JoystickController:
         self.joystick_knob = (152, 195, 121)
         self.slider_color = (86, 98, 112)
         self.slider_knob = (97, 175, 239)
+        self.joystick_servo_color = (209, 154, 102)
         self.text_color = (220, 220, 220)
         
         # Joystick properties
@@ -39,6 +40,14 @@ class JoystickController:
         self.slider_dragging = False
         self.slider_value = 90  # Start at midpoint (90)
         self.last_sent_value = 90
+        
+        # Joystick servo indicator
+        self.joystick_servo_value = 90  # Start at center
+        self.joystick_servo_rect = pygame.Rect(
+            self.width // 3 - 100, 
+            self.height // 2 + 150,
+            200, 30
+        )
         
         # Keyboard state tracking
         self.key_states = {
@@ -105,7 +114,7 @@ class JoystickController:
                           self.slider_knob_radius, 2)
         
         # Draw slider value
-        value_text = self.value_font.render(f"{self.slider_value}°", True, (97, 175, 239))
+        value_text = self.value_font.render(f"Slider: {self.slider_value}°", True, (97, 175, 239))
         self.screen.blit(value_text, (self.slider_x - value_text.get_width()//2, 
                                     self.slider_y - 50))
         
@@ -117,10 +126,32 @@ class JoystickController:
         self.screen.blit(max_text, (self.slider_x - self.slider_width//2 - 40, 
                                   self.slider_y - 10))
         
+        # Draw joystick servo indicator
+        pygame.draw.rect(self.screen, self.joystick_servo_color, self.joystick_servo_rect, 0, 5)
+        pygame.draw.rect(self.screen, (200, 200, 200), self.joystick_servo_rect, 3, 5)
+        
+        # Draw servo position indicator
+        indicator_x = self.joystick_servo_rect.x + (self.joystick_servo_value / 180) * self.joystick_servo_rect.width
+        pygame.draw.circle(self.screen, (255, 255, 255), (int(indicator_x), self.joystick_servo_rect.centery), 15, 0)
+        pygame.draw.circle(self.screen, (0, 0, 0), (int(indicator_x), self.joystick_servo_rect.centery), 15, 2)
+        
+        # Draw servo position labels
+        servo_text = self.value_font.render(f"Joystick Servo: {self.joystick_servo_value}°", True, self.joystick_servo_color)
+        self.screen.blit(servo_text, (self.joystick_servo_rect.centerx - servo_text.get_width()//2, 
+                                    self.joystick_servo_rect.y - 40))
+        
+        # Draw min/max labels for joystick servo
+        left_text = self.font.render("20°", True, self.text_color)
+        center_text = self.font.render("90°", True, self.text_color)
+        right_text = self.font.render("160°", True, self.text_color)
+        self.screen.blit(left_text, (self.joystick_servo_rect.x - 30, self.joystick_servo_rect.y + 40))
+        self.screen.blit(center_text, (self.joystick_servo_rect.centerx - center_text.get_width()//2, self.joystick_servo_rect.y + 40))
+        self.screen.blit(right_text, (self.joystick_servo_rect.right - right_text.get_width() + 30, self.joystick_servo_rect.y + 40))
+        
         # Instructions
         instructions = [
-            "Joystick: Drag or use W/A/S/D keys",
-            "Slider: Drag or use UP/DOWN arrows",
+            "Joystick: Drag or use W/A/S/D keys (controls servo)",
+            "Slider: Drag or use UP/DOWN arrows (controls servos 1-2)",
             "Press ESC to exit"
         ]
         
@@ -160,6 +191,20 @@ class JoystickController:
             if self.slider_value != self.last_sent_value:
                 self.send_command(f"SLIDER_{self.slider_value}")
                 self.last_sent_value = self.slider_value
+
+    def set_joystick_servo_value(self, direction):
+        # Map direction to servo angle
+        if direction == "LEFT":
+            new_value = 20
+        elif direction == "RIGHT":
+            new_value = 160
+        else:  # CENTER or other
+            new_value = 90
+        
+        # Update if changed
+        if new_value != self.joystick_servo_value:
+            self.joystick_servo_value = new_value
+            self.send_command(f"JOY_SERVO_{new_value}")
 
     def update_joystick_from_keys(self):
         # Calculate movement vector from keys
@@ -290,10 +335,12 @@ class JoystickController:
             elif self.key_states[pygame.K_DOWN]:
                 self.set_slider_value(self.slider_value - 1)
             
-            # Send joystick updates
+            # Send joystick servo updates
             if current_direction and current_direction != last_direction:
-                self.send_command(f"JOY_{current_direction}")
+                self.set_joystick_servo_value(current_direction)
                 last_direction = current_direction
+            elif current_direction == "CENTER" and last_direction != "CENTER":
+                self.set_joystick_servo_value("CENTER")
             
             # Draw the interface
             self.draw_interface()
