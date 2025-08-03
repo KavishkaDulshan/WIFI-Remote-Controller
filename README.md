@@ -10,6 +10,8 @@ servo 2 - GPIO 19
 
 Rudder servo - GPIO 21
 
+Ultra sonic sensor Pin out
+
 Sensor 1 (Left):
 
 VCC → 5V
