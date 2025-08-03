@@ -35,7 +35,7 @@ class RemoteController:
         self.slider_x = self.width - 150
         self.slider_y = 150
         self.slider_width = 30
-        self.slider_height = 300
+        self.slider_height = 350
         self.slider_knob_radius = 18
         self.slider_pos = self.slider_y + self.slider_height // 2
         self.slider_dragging = False
