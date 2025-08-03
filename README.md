@@ -41,3 +41,5 @@ Trig → GPIO12
 Echo → GPIO13
 
 GND → GND
+
+The propeller controls and obstacal avoidance features are not implemented yet.
