@@ -46,3 +46,15 @@ sudo systemctl unmask hostapd
 sudo systemctl enable hostapd
 sudo systemctl enable dnsmasq
 sudo reboot
+
+
+
+
+sudo apt install cmake libjpeg8-dev
+git clone https://github.com/jacksonliam/mjpg-streamer.git
+cd mjpg-streamer/mjpg-streamer-experimental
+make
+sudo make install
+
+# Start streaming (add to /etc/rc.local for auto-start)
+./mjpg_streamer -o "output_http.so -w ./www" -i "input_raspicam.so -x 640 -y 480 -fps 15"
