@@ -82,3 +82,11 @@ WantedBy=multi-user.target
 sudo systemctl daemon-reload
 sudo systemctl enable bridge.service
 sudo systemctl start bridge.service
+
+
+auto wlan0
+iface wlan0 inet static
+    address 192.168.10.1
+    netmask 255.255.255.0
+    network 192.168.10.0
+    broadcast 192.168.10.255
