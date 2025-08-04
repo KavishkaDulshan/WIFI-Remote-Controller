@@ -41,3 +41,8 @@ dhcp-range=192.168.10.100,192.168.10.200,255.255.255.0,24h
 interface wlan0
 static ip_address=192.168.10.1/24
 nohook wpa_supplicant
+
+sudo systemctl unmask hostapd
+sudo systemctl enable hostapd
+sudo systemctl enable dnsmasq
+sudo reboot
