@@ -77,3 +77,8 @@ User=pi
 
 [Install]
 WantedBy=multi-user.target
+
+
+sudo systemctl daemon-reload
+sudo systemctl enable bridge.service
+sudo systemctl start bridge.service
