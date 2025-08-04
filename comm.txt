@@ -1,161 +1,64 @@
-# Stop all network services
-sudo systemctl stop hostapd dnsmasq dhcpcd
-
-# Reset configuration files to default
-sudo cp /etc/dhcpcd.conf.orig /etc/dhcpcd.conf 2>/dev/null || echo "Original not found"
-sudo cp /etc/dnsmasq.conf.orig /etc/dnsmasq.conf 2>/dev/null || echo "Original not found"
-sudo rm /etc/hostapd/hostapd.conf
-
-# Remove custom services
-sudo systemctl disable hostapd dnsmasq bridge
-sudo rm /etc/systemd/system/bridge.service
-
-# Reboot to apply changes
-sudo reboot
-
 sudo apt update
-sudo apt full-upgrade -y
-sudo apt install hostapd dnsmasq python3-pip libopenjp2-7 libtiff5 libatlas-base-dev
-sudo pip3 install pillow
+sudo apt install network-manager -y
+sudo systemctl enable NetworkManager
+sudo systemctl start NetworkManager
 
-sudo raspi-config
+# Create hotspot profile
+sudo nmcli con add con-name BoatHotspot ifname wlan0 type wifi ssid "BoatController"
+sudo nmcli con modify BoatHotspot wifi-sec.key-mgmt wpa-psk
+sudo nmcli con modify BoatHotspot wifi-sec.psk "remote1234"
+sudo nmcli con modify BoatHotspot 802-11-wireless.mode ap
+sudo nmcli con modify BoatHotspot 802-11-wireless.band bg
+sudo nmcli con modify BoatHotspot ipv4.method shared
 
-sudo nano /etc/hostapd/hostapd.conf
+# Set highest autoconnect priority
+sudo nmcli con modify BoatHotspot connection.autoconnect yes
+sudo nmcli con modify BoatHotspot connection.autoconnect-priority 0
 
-
-interface=wlan0
-driver=nl80211
-ssid=BoatController
-hw_mode=g
-channel=7
-wmm_enabled=0
-macaddr_acl=0
-auth_algs=1
-ignore_broadcast_ssid=0
-wpa=2
-wpa_passphrase=remote1234
-wpa_key_mgmt=WPA-PSK
-wpa_pairwise=TKIP
-rsn_pairwise=CCMP
+# Enable and start hotspot
+sudo nmcli con up BoatHotspot
 
 
-sudo nano /etc/default/hostapd
+nmcli dev wifi list
+# Should show BoatController as an access point
 
-DAEMON_CONF="/etc/hostapd/hostapd.conf"
+# In bridge.py
+UDP_IP = '0.0.0.0'  # Listen on all interfaces
+UDP_PORT = 12345
 
-
-sudo nano /etc/dnsmasq.conf
-
-
-interface=wlan0
-dhcp-range=192.168.10.100,192.168.10.200,255.255.255.0,24h
+# No changes needed to ESP32 code
 
 
-sudo nano /etc/dhcpcd.conf
+ESP32_IP = "192.168.50.1"  # Network Manager's default AP gateway
+PORT = 12345
 
-
-interface wlan0
-static ip_address=192.168.10.1/24
-nohook wpa_supplicant
-
-sudo systemctl unmask hostapd
-sudo systemctl enable hostapd
-sudo systemctl enable dnsmasq
-sudo systemctl start hostapd
-sudo systemctl start dnsmasq
-
-# Install MJPG-streamer
-sudo apt install cmake libjpeg8-dev
-cd ~
-git clone https://github.com/jacksonliam/mjpg-streamer.git
-cd mjpg-streamer/mjpg-streamer-experimental
-make
-sudo make install
-
-# Create startup script
-sudo nano /usr/local/bin/start_stream.sh
-
-
-#!/bin/bash
-cd /home/pi/mjpg-streamer/mjpg-streamer-experimental
-./mjpg_streamer -o "output_http.so -w ./www" -i "input_raspicam.so -x 640 -y 480 -fps 15"
-
-
-sudo chmod +x /usr/local/bin/start_stream.sh
-
-# Create service
-sudo nano /etc/systemd/system/camera.service
+sudo nano /etc/systemd/system/boat-system.service
 
 
 [Unit]
-Description=Camera Streaming Service
+Description=Boat Control System
 After=network.target
 
 [Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/nmcli con up BoatHotspot
 ExecStart=/usr/local/bin/start_stream.sh
-WorkingDirectory=/home/pi/mjpg-streamer/mjpg-streamer-experimental
-Restart=always
-User=pi
-
-[Install]
-WantedBy=multi-user.target
-
-
-sudo systemctl daemon-reload
-sudo systemctl enable camera.service
-sudo systemctl start camera.service
-
-sudo nano /home/pi/bridge.py
-
-sudo nano /etc/systemd/system/bridge.service
-
-
-[Unit]
-Description=UDP-UART Bridge Service
-After=network.target
-
-[Service]
 ExecStart=/usr/bin/python3 /home/pi/bridge.py
-WorkingDirectory=/home/pi
-StandardOutput=inherit
-StandardError=inherit
-Restart=always
-User=pi
 
 [Install]
 WantedBy=multi-user.target
 
 sudo systemctl daemon-reload
-sudo systemctl enable bridge.service
-sudo systemctl start bridge.service
+sudo systemctl enable boat-system
 
-sudo raspi-config
+sudo nano /etc/udev/rules.d/99-uart.rules
 
-sudo nano /boot/config.txt
-
-enable_uart=1
-dtoverlay=disable-bt
-core_freq=250
-
-sudo reboot
-
-sudo systemctl status hostapd
-sudo systemctl status dnsmasq
-sudo systemctl status bridge
-sudo systemctl status camera
-
-iwconfig wlan0
+KERNEL=="ttyAMA0", GROUP="dialout", MODE="0660"
+KERNEL=="ttyS0", GROUP="dialout", MODE="0660"
 
 
-# Check camera service
-journalctl -u camera -b --no-pager
+sudo udevadm control --reload-rules
+sudo udevadm trigger
 
-# Test camera manually
-raspistill -v -o test.jpg
-
-
-# Check bridge service
-journalctl -u bridge -b --no-pager
-
-# Test UART connection
-sudo screen /dev/serial0 115200
+systemctl status boat-system
