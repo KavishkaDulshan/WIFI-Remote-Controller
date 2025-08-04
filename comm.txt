@@ -12,3 +12,20 @@ User=pi
 
 [Install]
 WantedBy=multi-user.target
+
+
+
+interface=wlan0
+driver=nl80211
+ssid=BoatController
+hw_mode=g
+channel=7
+wmm_enabled=0
+macaddr_acl=0
+auth_algs=1
+ignore_broadcast_ssid=0
+wpa=2
+wpa_passphrase=remote1234
+wpa_key_mgmt=WPA-PSK
+wpa_pairwise=TKIP
+rsn_pairwise=CCMP
