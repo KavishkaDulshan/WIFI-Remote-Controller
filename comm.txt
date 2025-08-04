@@ -1,0 +1,14 @@
+[Unit]
+Description=UDP-UART Bridge Service
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /home/pi/bridge.py
+WorkingDirectory=/home/pi
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=pi
+
+[Install]
+WantedBy=multi-user.target
