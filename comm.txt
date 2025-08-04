@@ -191,3 +191,110 @@ nmcli con show --active
 Connect your PC to "BoatController" WiFi
 
 Access camera at http://192.168.50.1:8080
+
+
+
+
+
+
+Step 1: Check Detailed Service Status
+bash
+journalctl -u boat-system.service -b --no-pager
+Step 2: Check Script Execution Permissions
+bash
+ls -l /usr/local/bin/boat-start.sh
+If not executable:
+
+bash
+sudo chmod +x /usr/local/bin/boat-start.sh
+Step 3: Test the Script Manually
+bash
+sudo /usr/local/bin/boat-start.sh
+Step 4: Common Fixes Based on Patterns
+Fix 1: Network Manager Dependency (Most Likely)
+bash
+sudo nano /etc/systemd/system/boat-system.service
+Add this under [Unit]:
+
+ini
+Requires=NetworkManager.service
+After=NetworkManager.service
+Fix 2: Add Startup Delay
+bash
+sudo nano /usr/local/bin/boat-start.sh
+Add at the top:
+
+bash
+#!/bin/bash
+sleep 10  # Wait for network initialization
+Fix 3: Specify Full Paths
+bash
+sudo nano /usr/local/bin/boat-start.sh
+Update to:
+
+bash
+#!/bin/bash
+
+# Start WiFi hotspot
+/usr/bin/nmcli con up BoatHotspot
+
+# Start camera stream
+/usr/local/bin/start_stream.sh &
+
+# Start UDP-UART bridge
+/usr/bin/python3 /home/pi/bridge.py
+Step 5: Enable Logging
+bash
+sudo nano /usr/local/bin/boat-start.sh
+Update to:
+
+bash
+#!/bin/bash
+
+# Create log file
+LOG=/home/pi/boat-start.log
+echo "$(date) - Starting boat system" > $LOG
+
+# Start WiFi hotspot
+echo "Starting WiFi hotspot" >> $LOG
+/usr/bin/nmcli con up BoatHotspot 2>&1 >> $LOG
+
+# Start camera stream
+echo "Starting camera stream" >> $LOG
+/usr/local/bin/start_stream.sh 2>&1 >> $LOG &
+
+# Start UDP-UART bridge
+echo "Starting bridge" >> $LOG
+/usr/bin/python3 /home/pi/bridge.py 2>&1 >> $LOG
+
+echo "All components started" >> $LOG
+Step 6: Update Service Configuration
+bash
+sudo nano /etc/systemd/system/boat-system.service
+Change to:
+
+ini
+[Unit]
+Description=Boat Control System
+After=network.target
+Requires=NetworkManager.service
+
+[Service]
+Type=forking
+ExecStart=/usr/local/bin/boat-start.sh
+WorkingDirectory=/home/pi
+Restart=on-failure
+RestartSec=10
+User=pi
+
+[Install]
+WantedBy=multi-user.target
+Step 7: Apply Changes
+bash
+sudo systemctl daemon-reload
+sudo systemctl reset-failed boat-system
+sudo systemctl start boat-system
+Step 8: Verify
+bash
+systemctl status boat-system
+cat /home/pi/boat-start.log
