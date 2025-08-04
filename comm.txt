@@ -90,3 +90,37 @@ iface wlan0 inet static
     netmask 255.255.255.0
     network 192.168.10.0
     broadcast 192.168.10.255
+
+
+    sudo nano /etc/systemd/system/hostapd.service
+
+    [Unit]
+Description=HostAPD for BoatController
+After=network.target
+
+[Service]
+ExecStart=/usr/sbin/hostapd /etc/hostapd/hostapd.conf -B
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+
+sudo systemctl daemon-reload
+sudo systemctl enable hostapd.service
+sudo systemctl start hostapd.service
+
+sudo iw list | grep "Supported interface modes" -A 8
+
+# Check IP assignment
+ip addr show wlan0
+
+# Check routing
+ip route
+
+# Check firewall
+sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+sudo iptables -A FORWARD -i wlan0 -o eth0 -m state --state RELATED,ESTABLISHED -j ACCEPT
+sudo iptables -A FORWARD -i eth0 -o wlan0 -j ACCEPT
+
+sudo systemctl status hostapd
+iwconfig
