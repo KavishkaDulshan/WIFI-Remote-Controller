@@ -58,3 +58,22 @@ sudo make install
 
 # Start streaming (add to /etc/rc.local for auto-start)
 ./mjpg_streamer -o "output_http.so -w ./www" -i "input_raspicam.so -x 640 -y 480 -fps 15"
+
+
+
+sudo nano /etc/systemd/system/bridge.service
+
+[Unit]
+Description=UDP-UART Bridge Service
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /home/pi/bridge.py
+WorkingDirectory=/home/pi
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=pi
+
+[Install]
+WantedBy=multi-user.target
