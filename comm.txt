@@ -1,18 +1,26 @@
-[Unit]
-Description=UDP-UART Bridge Service
-After=network.target
+# Stop all network services
+sudo systemctl stop hostapd dnsmasq dhcpcd
 
-[Service]
-ExecStart=/usr/bin/python3 /home/pi/bridge.py
-WorkingDirectory=/home/pi
-StandardOutput=inherit
-StandardError=inherit
-Restart=always
-User=pi
+# Reset configuration files to default
+sudo cp /etc/dhcpcd.conf.orig /etc/dhcpcd.conf 2>/dev/null || echo "Original not found"
+sudo cp /etc/dnsmasq.conf.orig /etc/dnsmasq.conf 2>/dev/null || echo "Original not found"
+sudo rm /etc/hostapd/hostapd.conf
 
-[Install]
-WantedBy=multi-user.target
+# Remove custom services
+sudo systemctl disable hostapd dnsmasq bridge
+sudo rm /etc/systemd/system/bridge.service
 
+# Reboot to apply changes
+sudo reboot
+
+sudo apt update
+sudo apt full-upgrade -y
+sudo apt install hostapd dnsmasq python3-pip libopenjp2-7 libtiff5 libatlas-base-dev
+sudo pip3 install pillow
+
+sudo raspi-config
+
+sudo nano /etc/hostapd/hostapd.conf
 
 
 interface=wlan0
@@ -31,11 +39,19 @@ wpa_pairwise=TKIP
 rsn_pairwise=CCMP
 
 
+sudo nano /etc/default/hostapd
+
+DAEMON_CONF="/etc/hostapd/hostapd.conf"
+
+
+sudo nano /etc/dnsmasq.conf
+
 
 interface=wlan0
 dhcp-range=192.168.10.100,192.168.10.200,255.255.255.0,24h
 
 
+sudo nano /etc/dhcpcd.conf
 
 
 interface wlan0
@@ -45,23 +61,54 @@ nohook wpa_supplicant
 sudo systemctl unmask hostapd
 sudo systemctl enable hostapd
 sudo systemctl enable dnsmasq
-sudo reboot
+sudo systemctl start hostapd
+sudo systemctl start dnsmasq
 
-
-
-
+# Install MJPG-streamer
 sudo apt install cmake libjpeg8-dev
+cd ~
 git clone https://github.com/jacksonliam/mjpg-streamer.git
 cd mjpg-streamer/mjpg-streamer-experimental
 make
 sudo make install
 
-# Start streaming (add to /etc/rc.local for auto-start)
+# Create startup script
+sudo nano /usr/local/bin/start_stream.sh
+
+
+#!/bin/bash
+cd /home/pi/mjpg-streamer/mjpg-streamer-experimental
 ./mjpg_streamer -o "output_http.so -w ./www" -i "input_raspicam.so -x 640 -y 480 -fps 15"
 
 
+sudo chmod +x /usr/local/bin/start_stream.sh
+
+# Create service
+sudo nano /etc/systemd/system/camera.service
+
+
+[Unit]
+Description=Camera Streaming Service
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/start_stream.sh
+WorkingDirectory=/home/pi/mjpg-streamer/mjpg-streamer-experimental
+Restart=always
+User=pi
+
+[Install]
+WantedBy=multi-user.target
+
+
+sudo systemctl daemon-reload
+sudo systemctl enable camera.service
+sudo systemctl start camera.service
+
+sudo nano /home/pi/bridge.py
 
 sudo nano /etc/systemd/system/bridge.service
+
 
 [Unit]
 Description=UDP-UART Bridge Service
@@ -78,54 +125,37 @@ User=pi
 [Install]
 WantedBy=multi-user.target
 
-
 sudo systemctl daemon-reload
 sudo systemctl enable bridge.service
 sudo systemctl start bridge.service
 
+sudo raspi-config
 
-auto wlan0
-iface wlan0 inet static
-    address 192.168.10.1
-    netmask 255.255.255.0
-    network 192.168.10.0
-    broadcast 192.168.10.255
+sudo nano /boot/config.txt
 
+enable_uart=1
+dtoverlay=disable-bt
+core_freq=250
 
-    sudo nano /etc/systemd/system/hostapd.service
-
-    [Unit]
-Description=HostAPD for BoatController
-After=network.target
-
-[Service]
-ExecStart=/usr/sbin/hostapd /etc/hostapd/hostapd.conf -B
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-
-sudo systemctl daemon-reload
-sudo systemctl enable hostapd.service
-sudo systemctl start hostapd.service
-
-sudo iw list | grep "Supported interface modes" -A 8
-
-# Check IP assignment
-ip addr show wlan0
-
-# Check routing
-ip route
-
-# Check firewall
-sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-sudo iptables -A FORWARD -i wlan0 -o eth0 -m state --state RELATED,ESTABLISHED -j ACCEPT
-sudo iptables -A FORWARD -i eth0 -o wlan0 -j ACCEPT
+sudo reboot
 
 sudo systemctl status hostapd
-iwconfig
+sudo systemctl status dnsmasq
+sudo systemctl status bridge
+sudo systemctl status camera
+
+iwconfig wlan0
 
 
-sudo systemctl disable dhcpd  # Temporarily disable DHCP
-sudo systemctl start hostapd  # Start hostapd first
-sudo systemctl enable dhcpd && sudo systemctl start dhcpd  # Now start DHCP
+# Check camera service
+journalctl -u camera -b --no-pager
+
+# Test camera manually
+raspistill -v -o test.jpg
+
+
+# Check bridge service
+journalctl -u bridge -b --no-pager
+
+# Test UART connection
+sudo screen /dev/serial0 115200
