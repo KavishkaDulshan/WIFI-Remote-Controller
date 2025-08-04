@@ -62,3 +62,132 @@ sudo udevadm control --reload-rules
 sudo udevadm trigger
 
 systemctl status boat-system
+
+
+
+
+--------------------------------------------------------------------------------
+
+
+nmcli con show
+
+sudo nano /etc/systemd/system/boat-system.service
+
+ExecStart=/usr/bin/nmcli con up Boathotspot
+
+ExecStart=/usr/bin/nmcli con up BoatHotspot
+
+sudo systemctl daemon-reload
+sudo systemctl restart boat-system
+sudo systemctl status boat-system  # Verify it's running
+
+
+
+
+
+
+
+
+🛠 Alternative Robust Solution
+If the issue persists, let's create a more reliable startup script:
+
+1. Create a Startup Script
+bash
+sudo nano /usr/local/bin/boat-start.sh
+bash
+#!/bin/bash
+
+# Start WiFi hotspot
+nmcli con up BoatHotspot
+
+# Start camera stream
+/usr/local/bin/start_stream.sh &
+
+# Start UDP-UART bridge
+python3 /home/pi/bridge.py
+Make executable:
+
+bash
+sudo chmod +x /usr/local/bin/boat-start.sh
+2. Update the Service File
+bash
+sudo nano /etc/systemd/system/boat-system.service
+Replace with:
+
+ini
+[Unit]
+Description=Boat Control System
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/boat-start.sh
+WorkingDirectory=/home/pi
+Restart=always
+RestartSec=10
+User=pi
+
+# Logging configuration
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=boat-system
+
+[Install]
+WantedBy=multi-user.target
+3. Enable and Test
+bash
+sudo systemctl daemon-reload
+sudo systemctl enable boat-system
+sudo systemctl start boat-system
+sudo journalctl -u boat-system -f  # Monitor logs
+🔍 Troubleshooting Tips
+Check WiFi interface status:
+
+bash
+nmcli device status
+Test hotspot manually:
+
+bash
+sudo nmcli con up BoatHotspot
+Verify connection details:
+
+bash
+nmcli con show BoatHotspot
+Check for conflicting services:
+
+bash
+sudo systemctl stop hostapd dnsmasq  # Stop legacy services if present
+sudo systemctl disable hostapd dnsmasq
+Increase startup delay (if needed):
+
+bash
+sudo nano /etc/systemd/system/boat-system.service
+Add under [Unit]:
+
+ini
+After=network.target
+StartLimitIntervalSec=120
+💻 Expected Successful Output
+bash
+● boat-system.service - Boat Control System
+     Loaded: loaded (/etc/systemd/system/boat-system.service; enabled; preset: enabled)
+     Active: active (running) since Mon 2025-08-04 15:25:00 BST; 1min ago
+   Main PID: 734 (boat-start.sh)
+      Tasks: 3 (limit: 415)
+        CPU: 12.345s
+     CGroup: /system.slice/boat-system.service
+             ├─734 /bin/bash /usr/local/bin/boat-start.sh
+             ├─789 /home/pi/mjpg-streamer/mjpg-streamer-experimental/mjpg_streamer -o "output_http.so -w ./www" -i "input_raspicam.so -x 640 -y 480 -fps 15"
+             └─791 python3 /home/pi/bridge.py
+📝 Final Verification
+Reboot your Pi:
+
+bash
+sudo reboot
+After reboot:
+
+bash
+systemctl status boat-system
+nmcli con show --active
+Connect your PC to "BoatController" WiFi
+
+Access camera at http://192.168.50.1:8080
