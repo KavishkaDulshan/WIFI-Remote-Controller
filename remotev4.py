@@ -4,7 +4,7 @@ import socket
 import math
 
 # WiFi configuration
-ESP32_IP = "192.168.50.1"  # Network Manager's default AP gateway
+ESP32_IP = "192.168.4.1"  # ESP32 default AP IP
 PORT = 12345
 
 class RemoteController:
