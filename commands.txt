@@ -455,3 +455,22 @@ Enhanced error handling
 
 Smooth UI experience on PC
 
+===================================================================
+
+
+# Install optimized dependencies
+sudo apt update
+sudo apt install -y python3-picamera2 python3-libcamera python3-opencv python3-numpy
+
+# Reduce GPU memory allocation
+sudo nano /boot/config.txt
+# Add/modify: gpu_mem=128
+
+# Increase swap space
+sudo nano /etc/dphys-swapfile
+# Change: CONF_SWAPSIZE=1024
+sudo /etc/init.d/dphys-swapfile restart
+
+# On Pi
+sudo apt install htop
+htop
