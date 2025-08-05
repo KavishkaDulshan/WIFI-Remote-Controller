@@ -42,4 +42,259 @@ Echo → GPIO13
 
 GND → GND
 
-The propeller controls and obstacal avoidance features are not implemented yet.
+---
+
+Step-by-Step Guide: Raspberry Pi as Central Hub
+New System Architecture
+text
+PC (WiFi) ↔ Raspberry Pi (AP) ↔ (UART) ↔ ESP32
+Phase 1: Configure Raspberry Pi as Access Point
+Update System
+
+bash
+sudo apt update && sudo apt upgrade -y
+Install Required Packages
+
+bash
+sudo apt install hostapd dnsmasq -y
+Configure DHCP (dnsmasq)
+
+Edit config file:
+
+bash
+sudo nano /etc/dnsmasq.conf
+Add these lines:
+
+conf
+interface=wlan0
+dhcp-range=192.168.10.100,192.168.10.200,255.255.255.0,24h
+Configure Access Point (hostapd)
+
+Create config file:
+
+bash
+sudo nano /etc/hostapd/hostapd.conf
+Add:
+
+conf
+interface=wlan0
+driver=nl80211
+ssid=Boat_Controller
+hw_mode=g
+channel=7
+wmm_enabled=0
+macaddr_acl=0
+auth_algs=1
+ignore_broadcast_ssid=0
+wpa=2
+wpa_passphrase=remote1234
+wpa_key_mgmt=WPA-PSK
+wpa_pairwise=TKIP
+rsn_pairwise=CCMP
+Set Static IP
+
+bash
+sudo nano /etc/dhcpcd.conf
+Add at end:
+
+conf
+interface wlan0
+static ip_address=192.168.10.1/24
+nohook wpa_supplicant
+Enable Services
+
+bash
+sudo systemctl unmask hostapd
+sudo systemctl enable hostapd dnsmasq
+sudo reboot
+Phase 2: UART Communication Setup
+Enable Serial Interface
+
+bash
+sudo raspi-config
+Navigate: Interfacing Options → Serial → Disable shell → Enable hardware
+
+Physical Connections
+
+text
+Raspberry Pi ESP32
+GPIO 14 (TXD) → GPIO 16 (RX)
+GPIO 15 (RXD) → GPIO 17 (TX)
+GND → GND
+Test Connection
+
+On Raspberry Pi:
+
+bash
+sudo apt install minicom -y
+minicom -b 115200 -o -D /dev/serial0
+Send test data from ESP32 to verify
+
+Phase 3: Bridge Software on Raspberry Pi
+Create Bridge Script
+
+bash
+sudo nano /home/pi/bridge.py
+Paste this code:
+
+python
+import socket
+import serial
+from threading import Thread
+
+# UDP Server (for PC)
+
+UDP_IP = "0.0.0.0"
+UDP_PORT = 12345
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.bind((UDP_IP, UDP_PORT))
+
+# UART Setup (for ESP32)
+
+ser = serial.Serial('/dev/serial0', 115200, timeout=1)
+
+# Store last client address
+
+client_addr = None
+
+def udp_to_uart():
+global client_addr
+while True:
+data, addr = sock.recvfrom(1024)
+client_addr = addr
+ser.write(data)
+print(f"PC → ESP32: {data.decode().strip()}")
+
+def uart_to_udp():
+while True:
+if ser.in_waiting:
+data = ser.readline().decode().strip()
+if data and client_addr:
+sock.sendto(data.encode(), client_addr)
+print(f"ESP32 → PC: {data}")
+
+# Start threads
+
+Thread(target=udp_to_uart, daemon=True).start()
+Thread(target=uart_to_udp, daemon=True).start()
+
+# Keep main thread alive
+
+while True:
+pass
+Create Systemd Service
+
+bash
+sudo nano /etc/systemd/system/bridge.service
+Add:
+
+ini
+[Unit]
+Description=UART-UDP Bridge Service
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /home/pi/bridge.py
+Restart=always
+User=pi
+
+[Install]
+WantedBy=multi-user.target
+Enable Autostart
+
+bash
+sudo systemctl daemon-reload
+sudo systemctl enable bridge.service
+sudo systemctl start bridge.service
+Phase 4: Modify ESP32 Code
+Remove WiFi/UDP Code
+Delete all WiFi/UDP related code from boatv1.ino
+
+Add UART Communication
+
+cpp
+// Add in global area
+#define RXD2 16
+#define TXD2 17
+
+void setup() {
+Serial.begin(115200);
+Serial2.begin(115200, SERIAL_8N1, RXD2, TXD2); // UART2
+// ... rest of setup
+}
+
+void loop() {
+// Receive commands
+if (Serial2.available()) {
+String command = Serial2.readStringUntil('\n');
+
+    if (command.startsWith("SLIDER_")) {
+      int angle = command.substring(7).toInt();
+      // Process slider command
+    }
+    else if (command.startsWith("JOY_SERVO_")) {
+      int angle = command.substring(10).toInt();
+      // Process joystick command
+    }
+
+}
+
+// Send sensor data
+if (millis() - lastSensorSend >= 300) {
+String data = "SENSORS:" +
+String(dist1) + "," +
+String(dist2) + "," +
+String(dist3);
+Serial2.println(data);
+}
+}
+Phase 5: Update PC Remote Control
+Modify remotev4.py
+
+python
+
+# Change ESP32_IP to Raspberry Pi's AP IP
+
+ESP32_IP = "192.168.10.1" # Raspberry Pi's static IP
+PORT = 12345 # Same port
+Phase 6: Final Setup & Testing
+Power Sequence
+
+Power on Raspberry Pi first
+
+Wait 1 minute for services to start
+
+Power on ESP32
+
+Connect PC to "Boat_Controller" WiFi
+
+Test Commands
+
+Verify joystick/slider movements
+
+Confirm sensor data in PyGame interface
+
+Check logs on Raspberry Pi:
+
+bash
+journalctl -u bridge.service -f
+Troubleshooting
+
+No Connection: Check UART wiring
+
+Garbled Data: Verify baud rates (115200)
+
+Service Fail: Test bridge manually:
+
+bash
+python3 /home/pi/bridge.py
+Key Advantages
+Automatic Startup: All services launch on boot
+
+Single WiFi Connection: PC only connects to Raspberry Pi
+
+Reliable UART: Wired connection to ESP32
+
+Same Functionality: Remote control works identically
+
+This setup maintains your existing control interface while improving reliability through a wired Pi-ESP32 connection. The Raspberry Pi handles all network routing transparently.
